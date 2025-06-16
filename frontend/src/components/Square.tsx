@@ -8,14 +8,26 @@ interface SquareProps {
 
 export function Square({ value }: SquareProps) {
    let bgColor = "";
+   let border = "";
 
    if (value === 1) {
-      bgColor = "bg-neutral-800"; // black
+      bgColor = "#151515"; // black
+      border = "#222222";
    } else if (value === 2) {
-      bgColor = "bg-neutral-100"; // white
+      bgColor = "#e8e8e8"; // white
+      border = "#cccccc";
    } else {
-      bgColor = "bg-neutral-700"; // empty
+      bgColor = "#2A2A2A"; // empty
+      border = "#3a3a3a";
    }
 
-   return <div className={`aspect-square w-full ${bgColor}`}></div>;
+   return (
+      <div
+         className={`aspect-square w-full`}
+         style={{
+            backgroundColor: bgColor,
+            border: `1px solid ${border}`,
+         }}
+      ></div>
+   );
 }

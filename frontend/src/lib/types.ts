@@ -9,7 +9,7 @@ export type PieceShape = (0 | 1)[][];
 
 // Represents a polyomino piece
 export interface Piece {
-  id: string; // A unique identifier, e.g., "F5"
-  shape: PieceShape;
-  player: 1 | 2; // The player this piece belongs to
+   id: string;
+   shape: PieceShape;
+   player: 1 | 2;
 }

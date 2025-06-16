@@ -9,8 +9,8 @@ interface BoardProps {
 
 export function Board({ boardState }: BoardProps) {
    return (
-      <div className="bg-neutral-900 p-2 rounded-lg shadow-lg">
-         <div className="grid grid-cols-14 gap-px bg-neutral-500">
+      <div className="bg-[#3A3A3A] p-1 rounded-sm shadow-lg">
+         <div className="grid grid-cols-14">
             {boardState.map((row, rowIndex) =>
                row.map((squareValue, colIndex) => (
                   <Square key={`${rowIndex}-${colIndex}`} value={squareValue} />
