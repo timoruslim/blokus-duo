@@ -7,6 +7,12 @@ export type BoardState = SquareValue[][];
 // Represents the shape of a piece
 export type PieceShape = (0 | 1)[][];
 
+// Represents a piece in its 'template' form
+export interface PieceTemplate {
+   id: string;
+   shape: PieceShape;
+}
+
 // Represents a polyomino piece
 export interface Piece {
    id: string;

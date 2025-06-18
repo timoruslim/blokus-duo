@@ -1,6 +1,7 @@
 "use client";
 
 import { SquareValue } from "@/lib/types";
+import { COLORS } from "@/lib/constants";
 
 interface SquareProps {
    value: SquareValue;
@@ -11,14 +12,14 @@ export function Square({ value }: SquareProps) {
    let border = "";
 
    if (value === 1) {
-      bgColor = "#151515"; // black
-      border = "#222222";
+      bgColor = COLORS.PLAYER_1; // black
+      border = COLORS.PLAYER_1_GRID;
    } else if (value === 2) {
-      bgColor = "#e8e8e8"; // white
-      border = "#cccccc";
+      bgColor = COLORS.PLAYER_2; // white
+      border = COLORS.PLAYER_2_GRID;
    } else {
-      bgColor = "#2A2A2A"; // empty
-      border = "#3a3a3a";
+      bgColor = COLORS.EMPTY_SQUARE; // empty
+      border = COLORS.GRID_LINES;
    }
 
    return (

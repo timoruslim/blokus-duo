@@ -1,6 +1,7 @@
 "use client";
 
 import { BoardState } from "@/lib/types";
+import { COLORS } from "@/lib/constants";
 import { Square } from "./Square";
 
 interface BoardProps {
@@ -9,11 +10,11 @@ interface BoardProps {
 
 export function Board({ boardState }: BoardProps) {
    return (
-      <div className="bg-[#3A3A3A] p-1 rounded-sm shadow-lg">
+      <div className={`bg-[${COLORS.GRID_LINES}] p-1 rounded-sm shadow-lg`}>
          <div className="grid grid-cols-14">
             {boardState.map((row, rowIndex) =>
                row.map((squareValue, colIndex) => (
-                  <Square key={`${rowIndex}-${colIndex}`} value={squareValue} />
+                  <Square key={`${rowIndex},${colIndex}`} value={squareValue} />
                ))
             )}
          </div>
