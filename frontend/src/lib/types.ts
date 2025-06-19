@@ -16,6 +16,8 @@ export interface PieceTemplate {
 // Represents a polyomino piece
 export interface Piece {
    id: string;
-   shape: PieceShape;
+   baseShape: PieceShape; // The original, unmodified shape
+   rotation: number; // Rotation in degrees (0, 90, 180, 270)
+   isFlipped: boolean; // Is it flipped horizontally?
    player: 1 | 2;
 }

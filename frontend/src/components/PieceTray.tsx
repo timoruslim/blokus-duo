@@ -5,30 +5,21 @@ import { Piece } from "./Piece";
 
 interface PieceTrayProps {
    pieces: PieceType[];
-   onPieceSelect: (piece: PieceType) => void;
-   onPieceRotate: () => void;
-   onPieceFlip: () => void;
-   selectedPiece: PieceType | null;
+   onPieceRotate: (pieceId: string, player: 1 | 2) => void;
+   onPieceFlip: (pieceId: string, player: 1 | 2) => void;
 }
 
-export function PieceTray({
-   pieces,
-   onPieceSelect,
-   onPieceRotate,
-   onPieceFlip,
-   selectedPiece,
-}: PieceTrayProps) {
+export function PieceTray({ pieces, onPieceRotate, onPieceFlip }: PieceTrayProps) {
    return (
-      <div className="flex flex-wrap items-center gap-4 justify-center p-4 border border-gray-600 rounded-lg w-80">
+      <div className="flex flex-wrap items-center gap-2 justify-center p-2 border border-gray-600 rounded-lg w-96">
          {pieces.map((piece) => (
-            <Piece
-               key={piece.id}
-               piece={piece}
-               onSelect={onPieceSelect}
-               onRotate={onPieceRotate} // Pass down rotate handler
-               onFlip={onPieceFlip} // Pass down flip handler
-               isSelected={selectedPiece?.id === piece.id}
-            />
+            <div key={piece.id} className="w-24 h-24 flex items-center justify-center p-1">
+               <Piece
+                  piece={piece}
+                  onRotate={() => onPieceRotate(piece.id, piece.player)}
+                  onFlip={() => onPieceFlip(piece.id, piece.player)}
+               />
+            </div>
          ))}
       </div>
    );

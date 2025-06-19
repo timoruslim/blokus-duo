@@ -2,45 +2,56 @@
 
 import { Piece as PieceType } from "@/lib/types";
 import { COLORS } from "@/lib/constants";
+import { useDraggable } from "@dnd-kit/core";
 
 interface PieceProps {
    piece: PieceType;
-   onSelect: (piece: PieceType) => void;
    onRotate: () => void;
    onFlip: () => void;
-   isSelected: boolean;
 }
 
-export function Piece({ piece, onSelect, onRotate, onFlip, isSelected }: PieceProps) {
+export function Piece({ piece, onRotate, onFlip }: PieceProps) {
    // Styling
    const pieceColor = piece.player === 1 ? COLORS.PLAYER_1 : COLORS.PLAYER_2;
    const borderColor = piece.player === 1 ? COLORS.PLAYER_1_GRID : COLORS.PLAYER_2_GRID;
    const squareSize = "w-4 h-4 md:w-5 md:h-5";
-   const selectionStyle = isSelected ? { outline: "3px solid #FBBF24" } : {};
+
+   const shapeKey = piece.baseShape.map((r) => r.join("")).join(",");
 
    const handleWheel = (event: React.WheelEvent) => {
       event.preventDefault();
       onRotate();
    };
 
+   const handleRightClick = (event: React.MouseEvent) => {
+      event.preventDefault();
+      onFlip();
+   };
+
+   const handleDragStart = (event: React.DragEvent) => {
+      event.dataTransfer.setData("application/json", JSON.stringify(piece));
+   };
+
    return (
       <div
-         className="grid cursor-pointer"
+         key={shapeKey}
+         draggable="true"
+         onDragStart={handleDragStart}
+         className="grid cursor-pointer animate-fade-in"
          style={{
-            gridTemplateColumns: `repeat(${piece.shape[0].length}, 1fr)`,
-            ...selectionStyle,
+            gridTemplateColumns: `repeat(${piece.baseShape[0].length}, 1fr)`,
+            transform: `rotate(${piece.rotation}deg) scaleX(${piece.isFlipped ? -1 : 1})`,
+            transition: "transform 0.2s ease-out",
          }}
-         onClick={() => onSelect(piece)}
-         onWheel={isSelected ? handleWheel : undefined}
-         onDoubleClick={isSelected ? onFlip : undefined}
+         onClick={onRotate} // Left click rotates
+         onContextMenu={handleRightClick} // Right click flips
+         onWheel={handleWheel} // Scrolling rotates
       >
-         {piece.shape.map((row, rowIndex) =>
+         {piece.baseShape.map((row, rowIndex) =>
             row.map((cell, colIndex) => {
-               // Empty cell
                if (cell === 0) {
                   return <div key={`${rowIndex},${colIndex}`} className={squareSize} />;
                }
-               // Filled cell
                return (
                   <div
                      key={`${rowIndex},${colIndex}`}
