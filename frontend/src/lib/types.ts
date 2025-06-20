@@ -1,5 +1,5 @@
 // Represents a square on the board
-export type SquareValue = 0 | 1 | 2; // 0 = empty, 1 = black, 2 = white
+export type SquareValue = 0 | 1 | 2 | -1 | -2; // 0 = empty, 1 = black, 2 = white, -1 = invalid, -2 = valid
 
 // Represents the 14x14 game board
 export type BoardState = SquareValue[][];
