@@ -33,4 +33,8 @@ export interface GameState {
    };
    gameOver: boolean;
    winner: 1 | 2 | "draw" | null;
+   lastPiecePlaced: {
+      player1: string | null;
+      player2: string | null;
+   };
 }

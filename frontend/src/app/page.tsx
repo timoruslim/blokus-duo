@@ -51,6 +51,7 @@ function BlokusGame() {
       scores: { player1: 0, player2: 0 },
       gameOver: false,
       winner: null,
+      lastPiecePlaced: { player1: null, player2: null },
       dragAttempt: 0,
    });
 
@@ -96,28 +97,45 @@ function BlokusGame() {
          );
 
          if (!otherPlayerHasMoves) {
-            // GAME OVER: Neither player can move.
-            const score1 = gameState.player1Pieces.reduce(
+            let score1 = 0;
+            let score2 = 0;
+
+            const penalty1 = gameState.player1Pieces.reduce(
                (sum, p) => sum + p.baseShape.flat().filter((c) => c === 1).length,
                0
             );
-            const score2 = gameState.player2Pieces.reduce(
+            const penalty2 = gameState.player2Pieces.reduce(
                (sum, p) => sum + p.baseShape.flat().filter((c) => c === 1).length,
                0
             );
+
+            score1 -= penalty1;
+            score2 -= penalty2;
+
+            if (gameState.player1Pieces.length === 0) {
+               score1 += 15;
+               if (gameState.lastPiecePlaced.player1 === "I1") {
+                  score1 += 5;
+               }
+            }
+            if (gameState.player2Pieces.length === 0) {
+               score2 += 15;
+               if (gameState.lastPiecePlaced.player2 === "I1") {
+                  score2 += 5;
+               }
+            }
 
             setGameState((prev) => ({
                ...prev,
                gameOver: true,
                scores: { player1: score1, player2: score2 },
-               winner: score1 < score2 ? 1 : score2 < score1 ? 2 : "draw",
+               winner: score1 > score2 ? 1 : score2 > score1 ? 2 : "draw",
             }));
          } else {
-            // Auto-pass turn
             setGameState((prev) => ({ ...prev, currentPlayer: otherPlayer }));
          }
       }
-   }, [gameState.currentPlayer, gameState.board]); // Dependencies that trigger a game flow check
+   }, [gameState.currentPlayer, gameState.board]);
 
    const sensors = useSensors(
       useSensor(PointerSensor, {
@@ -216,12 +234,17 @@ function BlokusGame() {
                }
                const originalPieces = piece.player === 1 ? prev.player1Pieces : prev.player2Pieces;
                const newPlayerPieces = originalPieces.filter((p) => p.id !== piece.id);
+               const newLastPiecePlaced = {
+                  ...prev.lastPiecePlaced,
+                  ...(piece.player === 1 ? { player1: piece.id } : { player2: piece.id }),
+               };
                return {
                   ...prev,
                   board: newBoard,
                   ...(piece.player === 1
                      ? { player1Pieces: newPlayerPieces }
                      : { player2Pieces: newPlayerPieces }),
+                  lastPiecePlaced: newLastPiecePlaced,
                   currentPlayer: prev.currentPlayer === 1 ? 2 : 1,
                   dragAttempt: prev.dragAttempt + 1,
                };
@@ -259,7 +282,7 @@ function BlokusGame() {
             <div className="basis-1/3 flex flex-col items-center justify-center h-full">
                <h1 className="text-4xl font-bold mb-4 text-white">Blokus Duo</h1>
                {/* NEW: Display for game status */}
-               <div className="h-12 text-center">
+               <div className="h-12 text-center mb-8">
                   {gameState.gameOver ? (
                      <div className="text-green-400 text-2xl animate-fade-in">
                         <h2>Game Over!</h2>
