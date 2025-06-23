@@ -4,9 +4,9 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Board } from "@/components/Board";
 import { PieceTray } from "@/components/PieceTray";
 import { Piece as PieceComponent } from "@/components/Piece";
-import { BoardState, Piece as PieceType, PieceTemplate } from "@/lib/types";
+import { GameState, BoardState, Piece as PieceType, PieceTemplate } from "@/lib/types";
 import { PIECE_LIBRARY } from "@/lib/pieces";
-import { getTransformedShape, isMoveValid } from "@/lib/pieceUtils";
+import { getTransformedShape, isMoveValid, playerHasValidMoves } from "@/lib/pieceUtils";
 import {
    DndContext,
    DragOverlay,
@@ -18,13 +18,6 @@ import {
    PointerSensor,
 } from "@dnd-kit/core";
 import { ClientOnly } from "@/components/ClientOnly";
-
-interface GameState {
-   board: BoardState;
-   player1Pieces: PieceType[];
-   player2Pieces: PieceType[];
-   currentPlayer: 1 | 2;
-}
 
 const createInitialBoard = (): BoardState => {
    return Array(14)
@@ -55,6 +48,9 @@ function BlokusGame() {
       player1Pieces: createPlayerSet(1),
       player2Pieces: createPlayerSet(2),
       currentPlayer: 1,
+      scores: { player1: 0, player2: 0 },
+      gameOver: false,
+      winner: null,
       dragAttempt: 0,
    });
 
@@ -78,6 +74,51 @@ function BlokusGame() {
       return () => window.removeEventListener("resize", calculateSquareSize);
    }, []);
 
+   useEffect(() => {
+      if (gameState.gameOver) return;
+
+      const activePlayerPieces =
+         gameState.currentPlayer === 1 ? gameState.player1Pieces : gameState.player2Pieces;
+      const hasMoves = playerHasValidMoves(
+         gameState.currentPlayer,
+         gameState.board,
+         activePlayerPieces
+      );
+
+      if (!hasMoves) {
+         const otherPlayer = gameState.currentPlayer === 1 ? 2 : 1;
+         const otherPlayerPieces =
+            otherPlayer === 1 ? gameState.player1Pieces : gameState.player2Pieces;
+         const otherPlayerHasMoves = playerHasValidMoves(
+            otherPlayer,
+            gameState.board,
+            otherPlayerPieces
+         );
+
+         if (!otherPlayerHasMoves) {
+            // GAME OVER: Neither player can move.
+            const score1 = gameState.player1Pieces.reduce(
+               (sum, p) => sum + p.baseShape.flat().filter((c) => c === 1).length,
+               0
+            );
+            const score2 = gameState.player2Pieces.reduce(
+               (sum, p) => sum + p.baseShape.flat().filter((c) => c === 1).length,
+               0
+            );
+
+            setGameState((prev) => ({
+               ...prev,
+               gameOver: true,
+               scores: { player1: score1, player2: score2 },
+               winner: score1 < score2 ? 1 : score2 < score1 ? 2 : "draw",
+            }));
+         } else {
+            // Auto-pass turn
+            setGameState((prev) => ({ ...prev, currentPlayer: otherPlayer }));
+         }
+      }
+   }, [gameState.currentPlayer, gameState.board]); // Dependencies that trigger a game flow check
+
    const sensors = useSensors(
       useSensor(PointerSensor, {
          activationConstraint: {
@@ -88,19 +129,21 @@ function BlokusGame() {
 
    const handleRotate = useCallback((pieceId: string, player: 1 | 2) => {
       setGameState((prev) => {
+         if (prev.gameOver) return prev;
          const piecesToUpdate = player === 1 ? prev.player1Pieces : prev.player2Pieces;
          const newPieces = piecesToUpdate.map((p) =>
-            p.id === pieceId ? { ...p, rotation: p.rotation + 90 } : p
+            p.id === pieceId ? { ...p, rotation: (p.rotation + 90) % 360 } : p
          );
          return {
             ...prev,
             ...(player === 1 ? { player1Pieces: newPieces } : { player2Pieces: newPieces }),
          };
       });
-   }, []); // Empty dependency array makes this function stable
+   }, []);
 
    const handleFlip = useCallback((pieceId: string, player: 1 | 2) => {
       setGameState((prev) => {
+         if (prev.gameOver) return prev;
          const piecesToUpdate = player === 1 ? prev.player1Pieces : prev.player2Pieces;
          const newPieces = piecesToUpdate.map((p) =>
             p.id === pieceId ? { ...p, isFlipped: !p.isFlipped } : p
@@ -110,16 +153,24 @@ function BlokusGame() {
             ...(player === 1 ? { player1Pieces: newPieces } : { player2Pieces: newPieces }),
          };
       });
-   }, []); // Empty dependency array makes this function stable
-
-   const handleDragStart = useCallback((event: DragStartEvent) => {
-      setActivePiece(event.active.data.current?.piece);
    }, []);
+
+   const handleDragStart = useCallback(
+      (event: DragStartEvent) => {
+         if (gameState.gameOver) return;
+         const piece = event.active.data.current?.piece as PieceType;
+         if (piece.player === gameState.currentPlayer) {
+            setActivePiece(piece);
+         }
+      },
+      [gameState.currentPlayer, gameState.gameOver]
+   );
 
    const handleDragOver = useCallback(
       (event: DragOverEvent) => {
+         if (!activePiece) return;
          const { over } = event;
-         if (!over || !activePiece) {
+         if (!over) {
             setGhostPiece(null);
             return;
          }
@@ -128,6 +179,7 @@ function BlokusGame() {
             setGhostPiece(null);
             return;
          }
+
          const [, rowStr, colStr] = overId.split("-");
          const row = parseInt(rowStr, 10);
          const col = parseInt(colStr, 10);
@@ -145,77 +197,42 @@ function BlokusGame() {
          );
          setGhostPiece({ piece: activePiece, row, col, isValid });
       },
-      [activePiece, gameState.board, gameState.player1Pieces.length, gameState.player2Pieces.length]
+      [activePiece, gameState.board]
    );
 
    const handleDragEnd = useCallback(
       (event: DragEndEvent) => {
-         const { active, over } = event;
-         const piece = active.data.current?.piece as PieceType;
-
-         // A flag to check if the state was updated, to avoid incrementing the counter twice
-         let moveMade = false;
-
-         if (piece && over && over.id.toString().startsWith("cell-")) {
-            const overId = over.id.toString();
-            const [, rowStr, colStr] = overId.split("-");
-            const row = parseInt(rowStr, 10);
-            const col = parseInt(colStr, 10);
-
+         if (ghostPiece && ghostPiece.isValid) {
+            const { piece, row, col } = ghostPiece;
             const finalShape = getTransformedShape(piece);
-
-            // This now uses the LATEST gameState because it's in the dependency array
-            const isFirstMove =
-               (piece.player === 1 && gameState.player1Pieces.length === PIECE_LIBRARY.length) ||
-               (piece.player === 2 && gameState.player2Pieces.length === PIECE_LIBRARY.length);
-
-            // This now uses the LATEST gameState.board
-            const isValid = isMoveValid(
-               gameState.board,
-               finalShape,
-               row,
-               col,
-               piece.player,
-               isFirstMove
-            );
-
-            if (isValid) {
-               moveMade = true;
-               setGameState((prev) => {
-                  const newBoard = JSON.parse(JSON.stringify(prev.board));
-                  for (let r = 0; r < finalShape.length; r++) {
-                     for (let c = 0; c < finalShape[r].length; c++) {
-                        if (finalShape[r][c] === 1) {
-                           newBoard[row + r][col + c] = piece.player;
-                        }
+            setGameState((prev) => {
+               const newBoard = JSON.parse(JSON.stringify(prev.board));
+               for (let r = 0; r < finalShape.length; r++) {
+                  for (let c = 0; c < finalShape[r].length; c++) {
+                     if (finalShape[r][c] === 1) {
+                        newBoard[row + r][col + c] = piece.player;
                      }
                   }
-                  const originalPieces =
-                     piece.player === 1 ? prev.player1Pieces : prev.player2Pieces;
-                  const newPlayerPieces = originalPieces.filter((p) => p.id !== piece.id);
-                  return {
-                     ...prev,
-                     board: newBoard,
-                     ...(piece.player === 1
-                        ? { player1Pieces: newPlayerPieces }
-                        : { player2Pieces: newPlayerPieces }),
-                     currentPlayer: prev.currentPlayer === 1 ? 2 : 1,
-                     dragAttempt: prev.dragAttempt + 1, // Increment counter on valid move
-                  };
-               });
-            }
-         }
-
-         // Reset visual state
-         setActivePiece(null);
-         setGhostPiece(null);
-
-         // If the move was not valid or dropped outside, increment counter to fix the original bug
-         if (!moveMade) {
+               }
+               const originalPieces = piece.player === 1 ? prev.player1Pieces : prev.player2Pieces;
+               const newPlayerPieces = originalPieces.filter((p) => p.id !== piece.id);
+               return {
+                  ...prev,
+                  board: newBoard,
+                  ...(piece.player === 1
+                     ? { player1Pieces: newPlayerPieces }
+                     : { player2Pieces: newPlayerPieces }),
+                  currentPlayer: prev.currentPlayer === 1 ? 2 : 1,
+                  dragAttempt: prev.dragAttempt + 1,
+               };
+            });
+         } else {
             setGameState((prev) => ({ ...prev, dragAttempt: prev.dragAttempt + 1 }));
          }
+         setActivePiece(null);
+         setGhostPiece(null);
       },
-      [gameState, setGameState] // Correct dependency array
+      [ghostPiece]
    );
 
    return (
@@ -226,21 +243,36 @@ function BlokusGame() {
          onDragEnd={handleDragEnd}
       >
          <main className="flex flex-row items-start justify-center h-screen min-h-screen p-5 bg-[#121212] gap-8">
-            {/* Player 1 (White) Piece Tray */}
             <div className="basis-1/3 flex flex-col items-center justify-center h-full">
                <h2 className="text-white text-xl mb-4 font-semibold">Player 1 (White)</h2>
+               {/* NEW: Score display */}
+               <p className="text-white mb-2">Score: {gameState.scores.player1}</p>
                <PieceTray
                   pieces={gameState.player1Pieces}
                   onPieceRotate={handleRotate}
                   onPieceFlip={handleFlip}
                   activePieceId={activePiece ? activePiece.id + "_" + activePiece.player : null}
                   dragAttempt={gameState.dragAttempt}
+                  disabled={gameState.currentPlayer !== 1 || gameState.gameOver}
                />
             </div>
-
-            {/* Center Column with the Board */}
             <div className="basis-1/3 flex flex-col items-center justify-center h-full">
                <h1 className="text-4xl font-bold mb-4 text-white">Blokus Duo</h1>
+               {/* NEW: Display for game status */}
+               <div className="h-12 text-center">
+                  {gameState.gameOver ? (
+                     <div className="text-green-400 text-2xl animate-fade-in">
+                        <h2>Game Over!</h2>
+                        <p className="text-lg">
+                           {gameState.winner === "draw"
+                              ? "It's a draw!"
+                              : `Player ${gameState.winner} wins!`}
+                        </p>
+                     </div>
+                  ) : (
+                     <h2 className="text-white text-xl">Player {gameState.currentPlayer}'s Turn</h2>
+                  )}
+               </div>
                <div ref={boardContainerRef} className="w-full max-w-lg">
                   <Board
                      boardState={gameState.board}
@@ -249,16 +281,17 @@ function BlokusGame() {
                   />
                </div>
             </div>
-
-            {/* Player 2 (Black) Piece Tray */}
             <div className="basis-1/3 flex flex-col items-center justify-center h-full">
                <h2 className="text-white text-xl mb-4 font-semibold">Player 2 (Black)</h2>
+               {/* NEW: Score display */}
+               <p className="text-white mb-2">Score: {gameState.scores.player2}</p>
                <PieceTray
                   pieces={gameState.player2Pieces}
                   onPieceRotate={handleRotate}
                   onPieceFlip={handleFlip}
                   activePieceId={activePiece ? activePiece.id + "_" + activePiece.player : null}
                   dragAttempt={gameState.dragAttempt}
+                  disabled={gameState.currentPlayer !== 2 || gameState.gameOver}
                />
             </div>
          </main>

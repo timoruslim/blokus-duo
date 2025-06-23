@@ -21,3 +21,16 @@ export interface Piece {
    isFlipped: boolean; // Is it flipped horizontally?
    player: 1 | 2;
 }
+
+export interface GameState {
+   board: BoardState;
+   player1Pieces: Piece[];
+   player2Pieces: Piece[];
+   currentPlayer: 1 | 2;
+   scores: {
+      player1: number;
+      player2: number;
+   };
+   gameOver: boolean;
+   winner: 1 | 2 | "draw" | null;
+}

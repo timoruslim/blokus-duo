@@ -10,12 +10,21 @@ interface PieceProps {
    squareSize?: number;
    onRotate?: () => void;
    onFlip?: () => void;
+   disabled?: boolean;
 }
 
-export function Piece({ piece, isDragging, squareSize = 20, onRotate, onFlip }: PieceProps) {
+export function Piece({
+   piece,
+   isDragging,
+   squareSize = 20,
+   onRotate,
+   onFlip,
+   disabled = false,
+}: PieceProps) {
    const { attributes, listeners, setNodeRef } = useDraggable({
       id: piece.id + "_" + piece.player, // Each draggable item needs a unique ID
       data: { piece }, // We pass the full piece data with the drag event
+      disabled: disabled,
    });
 
    // Styling
@@ -37,16 +46,16 @@ export function Piece({ piece, isDragging, squareSize = 20, onRotate, onFlip }: 
          ref={setNodeRef} // Attaches the hook to this DOM element
          {...listeners} // Attaches event listeners for dragging (like onPointerDown)
          {...attributes} // Attaches accessibility attributes
-         className="grid cursor-pointer animate-fade-in"
+         className={`grid ${disabled ? "cursor-not-allowed" : "cursor-pointer"} animate-fade-in`}
          style={{
             gridTemplateColumns: `repeat(${piece.baseShape[0].length}, 1fr)`,
             transform: `rotate(${piece.rotation}deg) scaleX(${piece.isFlipped ? -1 : 1})`,
             transition: "transform 0.2s ease-out",
-            opacity: isDragging ? 0.5 : 1,
+            opacity: disabled ? 0.6 : isDragging ? 0.5 : 1,
          }}
-         onClick={onRotate} // Left click rotates
-         onContextMenu={handleRightClick} // Right click flips
-         onWheel={handleWheel} // Scrolling rotates
+         onClick={disabled ? undefined : onRotate} // Left click rotates
+         onContextMenu={disabled ? undefined : handleRightClick} // Right click flips
+         onWheel={disabled ? undefined : handleWheel} // Scrolling rotates
       >
          {piece.baseShape.map((row, rowIndex) =>
             row.map((cell, colIndex) => {

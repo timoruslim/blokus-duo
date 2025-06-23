@@ -126,3 +126,36 @@ export function isMoveValid(
 
    return touchesCorner;
 }
+
+// Check if there are playable moves
+export function playerHasValidMoves(player: 1 | 2, board: BoardState, pieces: Piece[]): boolean {
+   const boardHeight = board.length;
+   const boardWidth = board[0].length;
+   const isFirstMove = pieces.length === 21;
+
+   // Check every remaining piece
+   for (const piece of pieces) {
+      // Check every possible orientation (4 rotations, 2 flips)
+      for (let flipCount = 0; flipCount < 2; flipCount++) {
+         const flippedPiece = { ...piece, isFlipped: flipCount === 1 };
+         for (let rotationCount = 0; rotationCount < 4; rotationCount++) {
+            const finalPiece = {
+               ...flippedPiece,
+               rotation: rotationCount * 90,
+            };
+            const shape = getTransformedShape(finalPiece);
+
+            // Check every possible position on the board
+            for (let row = -shape.length + 1; row < boardHeight; row++) {
+               for (let col = -shape[0].length + 1; col < boardWidth; col++) {
+                  if (isMoveValid(board, shape, row, col, player, isFirstMove)) {
+                     return true; // Found a valid move!
+                  }
+               }
+            }
+         }
+      }
+   }
+
+   return false; // No valid moves found for any piece in any orientation
+}

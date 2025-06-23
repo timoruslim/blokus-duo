@@ -9,6 +9,7 @@ interface PieceTrayProps {
    onPieceRotate: (pieceId: string, player: 1 | 2) => void;
    onPieceFlip: (pieceId: string, player: 1 | 2) => void;
    dragAttempt: number;
+   disabled: boolean;
 }
 
 export function PieceTray({
@@ -17,6 +18,7 @@ export function PieceTray({
    onPieceRotate,
    onPieceFlip,
    dragAttempt,
+   disabled,
 }: PieceTrayProps) {
    return (
       <div className="flex flex-wrap items-center gap-2 justify-center p-2 border border-gray-600 rounded-lg w-96">
@@ -30,6 +32,7 @@ export function PieceTray({
                   onRotate={() => onPieceRotate(piece.id, piece.player)}
                   onFlip={() => onPieceFlip(piece.id, piece.player)}
                   isDragging={activePieceId === piece.id + "_" + piece.player}
+                  disabled={disabled}
                />
             </div>
          ))}
