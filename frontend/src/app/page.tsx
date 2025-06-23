@@ -22,7 +22,7 @@ import { ClientOnly } from "@/components/ClientOnly";
 const createInitialBoard = (): BoardState => {
    return Array(14)
       .fill(null)
-      .map(() => Array(14).fill(0));
+      .map(() => Array(14).fill(3));
 };
 
 const createPlayerSet = (player: 1 | 2): PieceType[] => {

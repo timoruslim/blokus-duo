@@ -66,7 +66,7 @@ export function isMoveValid(
             }
 
             // 2. Overlap Check
-            if (board[boardRow][boardCol] !== 0) {
+            if (board[boardRow][boardCol] !== 3) {
                return false; // Overlaps with another piece
             }
 

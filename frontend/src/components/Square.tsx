@@ -8,10 +8,46 @@ interface SquareProps {
    value: SquareValue;
    row: number;
    col: number;
+   ghost: number;
    activePlayerForGhost: 1 | 2 | null;
 }
 
-export function Square({ value, row, col, activePlayerForGhost }: SquareProps) {
+function blendColors(baseHex: string, overlayHex: string, percent: number): string {
+   // Clamp percent to [0, 100]
+   percent = Math.max(0, Math.min(100, percent));
+   const alpha = percent / 100;
+
+   // Convert hex to RGB
+   const hexToRgb = (hex: string) => {
+      hex = hex.replace("#", "");
+      if (hex.length === 3)
+         hex = hex
+            .split("")
+            .map((c) => c + c)
+            .join("");
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      return { r, g, b };
+   };
+
+   // Blend the two colors
+   const base = hexToRgb(baseHex);
+   const overlay = hexToRgb(overlayHex);
+
+   const blend = (c1: number, c2: number) => Math.round(c1 + (c2 - c1) * alpha);
+
+   const r = blend(base.r, overlay.r);
+   const g = blend(base.g, overlay.g);
+   const b = blend(base.b, overlay.b);
+
+   // Convert back to hex
+   const toHex = (c: number) => c.toString(16).padStart(2, "0");
+
+   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+export function Square({ value, row, col, ghost, activePlayerForGhost }: SquareProps) {
    const { setNodeRef } = useDroppable({
       id: `cell-${row}-${col}`,
    });
@@ -25,24 +61,27 @@ export function Square({ value, row, col, activePlayerForGhost }: SquareProps) {
    } else if (value === 2) {
       bgColor = COLORS.PLAYER_2; // white
       border = COLORS.PLAYER_2_GRID;
-   } else if (value === 0) {
+   } else {
       bgColor = COLORS.EMPTY_SQUARE; // empty
       border = COLORS.GRID_LINES;
-   } else {
-      let ghostColor;
-      const isInvalid = value === -1;
+   }
 
-      if (activePlayerForGhost === 1) {
-         ghostColor = isInvalid ? COLORS.PLAYER_1_INVALID : COLORS.PLAYER_1_VALID;
-      } else if (activePlayerForGhost === 2) {
-         ghostColor = isInvalid ? COLORS.PLAYER_2_INVALID : COLORS.PLAYER_2_VALID;
-      } else {
-         // Fallback case, though a ghost shouldn't appear if there's no active player
-         ghostColor = "transparent";
+   if (activePlayerForGhost === 1) {
+      if (ghost == 1) {
+         bgColor = blendColors(bgColor, "#ffffff", 60);
+         border = blendColors(border, "#ffffff", 40);
+      } else if (ghost == -1) {
+         bgColor = blendColors(bgColor, "#ffffff", 30);
+         border = blendColors(border, "#ffffff", 10);
       }
-
-      bgColor = ghostColor;
-      border = COLORS.GRID_LINES;
+   } else if (activePlayerForGhost === 2) {
+      if (ghost == 1) {
+         bgColor = blendColors(bgColor, "#000000", 60);
+         border = blendColors(border, "#000000", 40);
+      } else if (ghost == -1) {
+         bgColor = blendColors(bgColor, "#000000", 30);
+         border = blendColors(border, "#000000", 10);
+      }
    }
 
    const isP1Start = row === 4 && col === 4;
@@ -57,7 +96,7 @@ export function Square({ value, row, col, activePlayerForGhost }: SquareProps) {
             border: `1px solid ${border}`,
          }}
       >
-         {value === 0 && (isP1Start || isP2Start) && (
+         {value === 3 && (isP1Start || isP2Start) && (
             <div
                className={`w-1/3 h-1/3 rounded-full`}
                style={{ border: `2px solid ${COLORS.GRID_LINES}` }}
