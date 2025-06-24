@@ -26,18 +26,31 @@ export function flipMatrix(matrix: PieceShape): PieceShape {
 
 // Transform based on display
 export function getTransformedShape(piece: Piece): PieceShape {
-   let shape = piece.baseShape;
+   let shape = piece.baseShape.map((row) => [...row]);
    const rotationCount = (piece.rotation / 90) % 4;
-
-   for (let i = 0; i < rotationCount; i++) {
-      shape = rotateMatrix(shape);
-   }
 
    if (piece.isFlipped) {
       shape = flipMatrix(shape);
    }
 
+   for (let i = 0; i < rotationCount; i++) {
+      shape = rotateMatrix(shape);
+   }
+
    return shape;
+}
+
+// Count score
+export function calculatePlacedScore(board: BoardState, player: 1 | 2): number {
+   let score = 0;
+   for (let r = 0; r < board.length; r++) {
+      for (let c = 0; c < board[r].length; c++) {
+         if (board[r][c] === player) {
+            score++;
+         }
+      }
+   }
+   return score;
 }
 
 // Check if move is valid

@@ -6,7 +6,12 @@ import { PieceTray } from "@/components/PieceTray";
 import { Piece as PieceComponent } from "@/components/Piece";
 import { GameState, BoardState, Piece as PieceType, PieceTemplate } from "@/lib/types";
 import { PIECE_LIBRARY } from "@/lib/pieces";
-import { getTransformedShape, isMoveValid, playerHasValidMoves } from "@/lib/pieceUtils";
+import {
+   getTransformedShape,
+   isMoveValid,
+   playerHasValidMoves,
+   calculatePlacedScore,
+} from "@/lib/pieceUtils";
 import {
    DndContext,
    DragOverlay,
@@ -150,7 +155,7 @@ function BlokusGame() {
          if (prev.gameOver) return prev;
          const piecesToUpdate = player === 1 ? prev.player1Pieces : prev.player2Pieces;
          const newPieces = piecesToUpdate.map((p) =>
-            p.id === pieceId ? { ...p, rotation: (p.rotation + 90) % 360 } : p
+            p.id === pieceId ? { ...p, rotation: p.rotation + 90 } : p
          );
          return {
             ...prev,
@@ -176,12 +181,25 @@ function BlokusGame() {
    const handleDragStart = useCallback(
       (event: DragStartEvent) => {
          if (gameState.gameOver) return;
-         const piece = event.active.data.current?.piece as PieceType;
-         if (piece.player === gameState.currentPlayer) {
-            setActivePiece(piece);
+
+         // Get the unique ID, e.g., "I5_1"
+         const { id: activeId } = event.active;
+         const [pieceId, playerStr] = (activeId as string).split("_");
+         const player = parseInt(playerStr, 10) as 1 | 2;
+
+         // Ensure the piece belongs to the current player
+         if (player === gameState.currentPlayer) {
+            const playerPieces = player === 1 ? gameState.player1Pieces : gameState.player2Pieces;
+
+            // Find the piece in the CURRENT game state to get its fresh data
+            const pieceToActivate = playerPieces.find((p) => p.id === pieceId);
+
+            if (pieceToActivate) {
+               setActivePiece(pieceToActivate);
+            }
          }
       },
-      [gameState.currentPlayer, gameState.gameOver]
+      [gameState]
    );
 
    const handleDragOver = useCallback(
@@ -238,9 +256,14 @@ function BlokusGame() {
                   ...prev.lastPiecePlaced,
                   ...(piece.player === 1 ? { player1: piece.id } : { player2: piece.id }),
                };
+               const newScores = {
+                  player1: calculatePlacedScore(newBoard, 1),
+                  player2: calculatePlacedScore(newBoard, 2),
+               };
                return {
                   ...prev,
                   board: newBoard,
+                  scores: newScores,
                   ...(piece.player === 1
                      ? { player1Pieces: newPlayerPieces }
                      : { player2Pieces: newPlayerPieces }),

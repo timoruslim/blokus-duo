@@ -38,3 +38,11 @@ export interface GameState {
       player2: string | null;
    };
 }
+
+export interface Move {
+   piece: Piece;
+   position: {
+      row: number;
+      col: number;
+   };
+}
