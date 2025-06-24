@@ -1,88 +1,183 @@
-import { GameState, Move } from "./types";
-import { BOARD_SIZE } from "./constants";
+import { GameState, Move, BoardState } from "./types";
 import { getTransformedShape, isMoveValid, calculatePlacedScore } from "./pieceUtils";
 
+type TranspositionTable = Map<string, { score: number; depth: number }>;
+
 // Heuristic
-export function evaluate(state: GameState, player: 1 | 2): number {
-   const opponent: 1 | 2 = player === 1 ? 2 : 1;
+function evaluate(state: GameState, player: 1 | 2): number {
+   const opponent = player === 1 ? 2 : 1;
 
-   const myScore = state.scores[`player${player}`];
-   const opponentScore = state.scores[`player${opponent}`];
+   // --- Heuristic 1: Score Difference (Material Advantage) ---
+   const myScore = calculatePlacedScore(state.board, player);
+   const opponentScore = calculatePlacedScore(state.board, opponent);
+   const scoreComponent = myScore - opponentScore;
 
-   return myScore - opponentScore;
+   // --- Heuristic 2: Mobility (Corner Control) ---
+   const myMobility = findValidCorners(state.board, player).length;
+   const opponentMobility = findValidCorners(state.board, opponent).length;
+   const mobilityComponent = myMobility - opponentMobility;
+
+   // --- Final Weighted Evaluation ---
+   const scoreWeight = 1.0;
+   const mobilityWeight = 1.0;
+   const finalEvaluation = scoreWeight * scoreComponent + mobilityWeight * mobilityComponent;
+
+   return finalEvaluation;
 }
+
+// Get all valid corners
+export const findValidCorners = (
+   board: BoardState,
+   player: 1 | 2
+): { row: number; col: number }[] => {
+   const corners = new Set<string>();
+   const boardSize = 14;
+
+   for (let r = 0; r < boardSize; r++) {
+      for (let c = 0; c < boardSize; c++) {
+         // A potential corner must be an empty square
+         if (board[r][c] !== 3) {
+            continue;
+         }
+
+         let hasDiagonalFriend = false;
+         let hasOrthogonalFriend = false;
+
+         // Check all 8 neighbors
+         for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+               if (dr === 0 && dc === 0) continue;
+
+               const nr = r + dr;
+               const nc = c + dc;
+
+               if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize) {
+                  if (board[nr][nc] === player) {
+                     if (dr === 0 || dc === 0) {
+                        // Is it an orthogonal neighbor?
+                        hasOrthogonalFriend = true;
+                     } else {
+                        // It must be a diagonal neighbor
+                        hasDiagonalFriend = true;
+                     }
+                  }
+               }
+            }
+         }
+
+         // A valid corner has a diagonal friendly piece, but NO orthogonal friendly pieces.
+         if (hasDiagonalFriend && !hasOrthogonalFriend) {
+            corners.add(`${r},${c}`);
+         }
+      }
+   }
+
+   return Array.from(corners).map((s) => {
+      const [row, col] = s.split(",").map(Number);
+      return { row, col };
+   });
+};
 
 // Get all valid moves
 export function generateMoves(state: GameState): Move[] {
-   const allPossibleMoves: Move[] = [];
+   const possibleMoves = new Map<string, Move>(); // Use a Map to prevent duplicate moves
    const player = state.currentPlayer;
    const pieces = player === 1 ? state.player1Pieces : state.player2Pieces;
    const isFirstMove = pieces.length === 21;
 
+   // Determine the set of squares to try placing pieces on
+   let anchorPoints: { row: number; col: number }[];
+   if (isFirstMove) {
+      // The official starting points for Blokus Duo
+      anchorPoints = player === 1 ? [{ row: 4, col: 4 }] : [{ row: 9, col: 9 }];
+   } else {
+      anchorPoints = findValidCorners(state.board, player);
+   }
+
+   // Set of unique shapes already processed to avoid redundant checks for symmetrical pieces
+   const uniqueShapes = new Set<string>();
+
    for (const piece of pieces) {
       for (let flipCount = 0; flipCount < 2; flipCount++) {
-         const flippedPiece = { ...piece, isFlipped: flipCount === 1 };
          for (let rotationCount = 0; rotationCount < 4; rotationCount++) {
             const finalPiece = {
-               ...flippedPiece,
+               ...piece,
+               isFlipped: flipCount === 1,
                rotation: rotationCount * 90,
             };
             const shape = getTransformedShape(finalPiece);
+            const shapeKey = JSON.stringify(shape);
 
-            // Check every possible position on the board
-            for (let row = -shape.length + 1; row < BOARD_SIZE; row++) {
-               for (let col = -shape[0].length + 1; col < BOARD_SIZE; col++) {
-                  if (isMoveValid(state.board, shape, row, col, player, isFirstMove)) {
-                     const move: Move = {
-                        piece: finalPiece,
-                        position: {
-                           row: row,
-                           col: col,
-                        },
-                     };
-                     allPossibleMoves.push(move);
+            if (uniqueShapes.has(shapeKey)) continue;
+            uniqueShapes.add(shapeKey);
+
+            // For each valid anchor point on the board...
+            for (const anchor of anchorPoints) {
+               // ...try to align every part of the piece with that anchor
+               for (let r_offset = 0; r_offset < shape.length; r_offset++) {
+                  for (let c_offset = 0; c_offset < shape[r_offset].length; c_offset++) {
+                     if (shape[r_offset][c_offset] === 1) {
+                        const placeRow = anchor.row - r_offset;
+                        const placeCol = anchor.col - c_offset;
+
+                        if (
+                           isMoveValid(state.board, shape, placeRow, placeCol, player, isFirstMove)
+                        ) {
+                           const move: Move = {
+                              piece: finalPiece,
+                              position: { row: placeRow, col: placeCol },
+                           };
+                           // Use a key to ensure we don't add the exact same move multiple times
+                           const moveKey = `${finalPiece.id}-${finalPiece.rotation}-${finalPiece.isFlipped}-${placeRow}-${placeCol}`;
+                           possibleMoves.set(moveKey, move);
+                        }
+                     }
                   }
                }
             }
          }
       }
    }
-
-   return allPossibleMoves;
+   return Array.from(possibleMoves.values());
 }
 
 // Apply move to state
 function applyMove(state: GameState, move: Move): GameState {
-   const newState: GameState = JSON.parse(JSON.stringify(state));
-   const { piece, position } = move;
+   const newState: GameState = {
+      ...state,
+      board: state.board.map((row) => [...row]),
+      player1Pieces: [...state.player1Pieces],
+      player2Pieces: [...state.player2Pieces],
+      scores: { ...state.scores },
+      lastPiecePlaced: { ...state.lastPiecePlaced },
+   };
 
+   const { piece, position } = move;
    const shape = getTransformedShape(piece);
    for (let r = 0; r < shape.length; r++) {
       for (let c = 0; c < shape[r].length; c++) {
          if (shape[r][c] === 1) {
             const boardRow = position.row + r;
             const boardCol = position.col + c;
-            if (newState.board[boardRow] && newState.board[boardRow][boardCol] !== undefined) {
+            if (newState.board[boardRow]?.[boardCol] !== undefined) {
                newState.board[boardRow][boardCol] = piece.player;
             }
          }
       }
    }
-
    const playerKey = `player${piece.player}Pieces` as const;
    newState[playerKey] = newState[playerKey].filter((p) => p.id !== piece.id);
-
-   const lastPiecePlayerKey = `player${piece.player}` as const;
-   newState.lastPiecePlaced[lastPiecePlayerKey] = piece.id;
-
    newState.scores = {
-      player1: calculatePlacedScore(state.board, 1),
-      player2: calculatePlacedScore(state.board, 2),
+      player1: calculatePlacedScore(newState.board, 1),
+      player2: calculatePlacedScore(newState.board, 2),
    };
-
    newState.currentPlayer = piece.player === 1 ? 2 : 1;
-
    return newState;
+}
+
+// Hash a board state
+function getBoardKey(board: BoardState): string {
+   return board.map((row) => row.join("")).join("");
 }
 
 // Calculate cost of a state (node) by recursive minimax
@@ -92,8 +187,16 @@ function minimax(
    alpha: number,
    beta: number,
    isMaximizingPlayer: boolean,
-   aiPlayer: 1 | 2
+   aiPlayer: 1 | 2,
+   transpositionTable: TranspositionTable
 ): number {
+   // Hash board state
+   const boardKey = getBoardKey(state.board);
+   const tableEntry = transpositionTable.get(boardKey);
+   if (tableEntry && tableEntry.depth >= depth) {
+      return tableEntry.score;
+   }
+
    // Base case 1: reached max depth
    if (depth === 0 || state.gameOver) {
       return evaluate(state, aiPlayer);
@@ -106,61 +209,105 @@ function minimax(
       return evaluate(state, aiPlayer);
    }
 
+   let bestEval;
    // Maximizing player: alpha
    if (isMaximizingPlayer) {
-      let maxEval = -Infinity;
+      bestEval = -Infinity;
       for (const move of possibleMoves) {
          const childState = applyMove(state, move);
-         const evalScore = minimax(childState, depth - 1, alpha, beta, false, aiPlayer);
-         maxEval = Math.max(maxEval, evalScore);
+         const evalScore = minimax(
+            childState,
+            depth - 1,
+            alpha,
+            beta,
+            false,
+            aiPlayer,
+            transpositionTable
+         );
+         bestEval = Math.max(bestEval, evalScore);
          alpha = Math.max(alpha, evalScore);
          // Prune
          if (beta <= alpha) {
             break;
          }
       }
-      return maxEval;
    }
 
    // Minimizing player: beta
    else {
-      let minEval = Infinity;
+      bestEval = Infinity;
       for (const move of possibleMoves) {
          const childState = applyMove(state, move);
-         const evalScore = minimax(childState, depth - 1, alpha, beta, true, aiPlayer);
-         minEval = Math.min(minEval, evalScore);
+         const evalScore = minimax(
+            childState,
+            depth - 1,
+            alpha,
+            beta,
+            true,
+            aiPlayer,
+            transpositionTable
+         );
+         bestEval = Math.min(bestEval, evalScore);
          beta = Math.min(beta, evalScore);
          // Prune
          if (beta <= alpha) {
             break;
          }
       }
-      return minEval;
    }
+
+   transpositionTable.set(boardKey, { score: bestEval, depth: depth });
+   return bestEval;
 }
 
 // Find best move from certain state (node)
-export function findBestMove(state: GameState, depth: number): Move | null {
+export async function findBestMove(state: GameState, depth: number): Promise<Move | null> {
    const aiPlayer = state.currentPlayer;
-   const possibleMoves = generateMoves(state);
+   let possibleMoves = generateMoves(state);
 
    if (possibleMoves.length === 0) {
       return null;
    }
 
-   let bestMove: Move | null = possibleMoves[0];
+   const transpositionTable: TranspositionTable = new Map();
+
+   const sortedMoves = possibleMoves.slice().sort((a, b) => {
+      const pieceASize = a.piece.baseShape.reduce((total, row) => {
+         const rowSum = row.reduce<number>((sum, cell) => sum + cell, 0);
+         return total + rowSum;
+      }, 0);
+
+      const pieceBSize = b.piece.baseShape.reduce((total, row) => {
+         const rowSum = row.reduce<number>((sum, cell) => sum + cell, 0);
+         return total + rowSum;
+      }, 0);
+
+      return pieceBSize - pieceASize;
+   });
+
+   let bestMove: Move | null = sortedMoves[0];
    let maxEval = -Infinity;
 
    // Iterate through every move
-   for (const move of possibleMoves) {
+   for (const move of sortedMoves) {
       const childState = applyMove(state, move);
-      const evalScore = minimax(childState, depth - 1, -Infinity, Infinity, false, aiPlayer);
+      const evalScore = minimax(
+         childState,
+         depth - 1,
+         -Infinity,
+         Infinity,
+         false,
+         aiPlayer,
+         transpositionTable
+      );
 
       // Found better move
       if (evalScore > maxEval) {
          maxEval = evalScore;
          bestMove = move;
       }
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
    }
 
    return bestMove;

@@ -53,7 +53,6 @@ function BlokusGame() {
    const [gameMode, setGameMode] = useState<"pvp" | "pva">("pvp");
    const [playerSide, setPlayerSide] = useState<1 | 2>(1);
    const [aiDifficulty, setAiDifficulty] = useState<number>(2);
-   const [aiThinkingTime, setAiThinkingTime] = useState<number | null>(null);
    const [gameStarted, setGameStarted] = useState<boolean>(false);
 
    const [gameState, setGameState] = useState<GameState & { dragAttempt: number }>({
@@ -67,6 +66,10 @@ function BlokusGame() {
       lastPiecePlaced: { player1: null, player2: null },
       dragAttempt: 0,
    });
+
+   const [lastTurnTimes, setLastTurnTimes] = useState({ player1: 0, player2: 0 });
+   const [activeTurnTime, setActiveTurnTime] = useState(0);
+   const activeTurnTimeRef = useRef(activeTurnTime);
 
    const [activePiece, setActivePiece] = useState<PieceType | null>(null);
    const [ghostPiece, setGhostPiece] = useState<GhostPiece | null>(null);
@@ -151,31 +154,50 @@ function BlokusGame() {
       }
    }, [gameState.currentPlayer, gameState.board]);
 
+   useEffect(() => {
+      activeTurnTimeRef.current = activeTurnTime;
+   }, [activeTurnTime]);
+
    // AI move
    useEffect(() => {
-      const isAITurn =
-         gameMode === "pva" && !gameState.gameOver && gameState.currentPlayer !== playerSide;
+      const runAITurn = async () => {
+         const isAITurn =
+            gameMode === "pva" && !gameState.gameOver && gameState.currentPlayer !== playerSide;
 
-      if (isAITurn) {
-         const timer = setTimeout(() => {
-            const startTime = performance.now();
-            const bestMove = findBestMove(gameState, aiDifficulty);
-            const endTime = performance.now();
-            setAiThinkingTime(endTime - startTime);
+         if (isAITurn) {
+            const bestMove = await findBestMove(gameState, aiDifficulty);
 
             if (bestMove) {
-               handlePlacePiece(bestMove.piece, bestMove.position);
+               handlePlacePiece(bestMove.piece, bestMove.position, activeTurnTimeRef.current);
             } else {
+               setLastTurnTimes((prev) => ({
+                  ...prev,
+                  [`player${gameState.currentPlayer}`]: activeTurnTime,
+               }));
+               setActiveTurnTime(0);
                setGameState((prev) => ({
                   ...prev,
                   currentPlayer: prev.currentPlayer === 1 ? 2 : 1,
                }));
             }
-         }, 0); // delay if needed
+         }
+      };
 
-         return () => clearTimeout(timer);
-      }
+      runAITurn();
    }, [gameState.currentPlayer, gameState.gameOver, gameMode, playerSide, aiDifficulty]);
+
+   // Calculate turn time
+   useEffect(() => {
+      if (!gameStarted || gameState.gameOver) {
+         return;
+      }
+
+      const intervalId = setInterval(() => {
+         setActiveTurnTime((t) => t + 0.1);
+      }, 100);
+
+      return () => clearInterval(intervalId);
+   }, [gameState.currentPlayer, gameStarted, gameState.gameOver]);
 
    const sensors = useSensors(
       useSensor(MouseSensor, {
@@ -192,7 +214,15 @@ function BlokusGame() {
    );
 
    const handlePlacePiece = useCallback(
-      (piece: PieceType, position: { row: number; col: number }) => {
+      (piece: PieceType, position: { row: number; col: number }, finalTurnTime: number) => {
+         // Start turn clock
+         setLastTurnTimes((prev) => ({
+            ...prev,
+            [`player${piece.player}`]: finalTurnTime,
+         }));
+         setActiveTurnTime(0);
+
+         // Update board
          setGameState((prev) => {
             const finalShape = getTransformedShape(piece);
             const newBoard = JSON.parse(JSON.stringify(prev.board));
@@ -310,7 +340,11 @@ function BlokusGame() {
    const handleDragEnd = useCallback(
       (event: DragEndEvent) => {
          if (ghostPiece && ghostPiece.isValid) {
-            handlePlacePiece(ghostPiece.piece, { row: ghostPiece.row, col: ghostPiece.col });
+            handlePlacePiece(
+               ghostPiece.piece,
+               { row: ghostPiece.row, col: ghostPiece.col },
+               activeTurnTimeRef.current
+            );
          }
          setActivePiece(null);
          setGhostPiece(null);
@@ -407,11 +441,11 @@ function BlokusGame() {
          <main className="flex flex-row items-start justify-center h-screen min-h-screen p-5 bg-[#121212] gap-8">
             <div className="basis-1/3 flex flex-col items-center justify-center h-full">
                <h2 className="text-white text-xl mb-1 font-semibold">Player 1 (White)</h2>
-               {gameMode === "pva" && playerSide === 2 && aiThinkingTime !== null && (
-                  <p className="text-xs text-gray-400 mb-4">
-                     Thinking time: {(aiThinkingTime / 1000).toFixed(2)}s
-                  </p>
-               )}
+               <p className="text-xs text-yellow-400 mb-4">
+                  {gameState.currentPlayer === 1
+                     ? `Time: ${activeTurnTime.toFixed(1)}s`
+                     : `Last Turn: ${lastTurnTimes.player1.toFixed(1)}s`}
+               </p>
                <p className="text-white mb-2">Score: {gameState.scores.player1}</p>
                <PieceTray
                   pieces={gameState.player1Pieces}
@@ -451,13 +485,13 @@ function BlokusGame() {
                </div>
             </div>
             <div className="basis-1/3 flex flex-col items-center justify-center h-full">
-               <h2 className="text-white text-xl mb-4 font-semibold">Player 2 (Black)</h2>
+               <h2 className="text-white text-xl mb-1 font-semibold">Player 2 (Black)</h2>
+               <p className="text-xs text-yellow-400 mb-4">
+                  {gameState.currentPlayer === 2
+                     ? `Time: ${activeTurnTime.toFixed(1)}s`
+                     : `Last Turn: ${lastTurnTimes.player2.toFixed(1)}s`}
+               </p>
                <p className="text-white mb-2">Score: {gameState.scores.player2}</p>
-               {gameMode === "pva" && playerSide === 1 && aiThinkingTime !== null && (
-                  <p className="text-xs text-gray-400">
-                     Thinking time: {(aiThinkingTime / 1000).toFixed(2)}s
-                  </p>
-               )}
                <PieceTray
                   pieces={gameState.player2Pieces}
                   onPieceRotate={handleRotate}
