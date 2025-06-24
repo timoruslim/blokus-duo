@@ -2,6 +2,7 @@
 
 import { Piece as PieceType } from "@/lib/types";
 import { Piece } from "./Piece";
+import { COLORS } from "@/lib/constants";
 
 interface PieceTrayProps {
    pieces: PieceType[];
@@ -21,7 +22,9 @@ export function PieceTray({
    disabled,
 }: PieceTrayProps) {
    return (
-      <div className="flex flex-wrap items-center gap-2 justify-center p-2 border border-gray-600 rounded-lg w-96">
+      <div
+         className={`flex flex-wrap items-center gap-2 justify-center p-2 border border-gray-600 rounded-lg w-96`}
+      >
          {pieces.map((piece) => (
             <div
                key={`${piece.id}_${piece.player}_${dragAttempt}`}

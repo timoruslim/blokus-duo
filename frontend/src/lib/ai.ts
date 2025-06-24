@@ -17,12 +17,38 @@ function evaluate(state: GameState, player: 1 | 2): number {
    const opponentMobility = findValidCorners(state.board, opponent).length;
    const mobilityComponent = myMobility - opponentMobility;
 
+   // -- Heurstic 3: Centrilization (Center Control) ---
+   const playerCentralization = evaluateCentralization(state.board, player);
+   const opponentCentralization = evaluateCentralization(state.board, opponent);
+   const centralizationScore = playerCentralization - opponentCentralization;
+
    // --- Final Weighted Evaluation ---
    const scoreWeight = 1.0;
-   const mobilityWeight = 1.0;
-   const finalEvaluation = scoreWeight * scoreComponent + mobilityWeight * mobilityComponent;
+   const mobilityWeight = 0.9;
+   const centralizationWeight = 0.5;
+   const finalEvaluation =
+      scoreWeight * scoreComponent +
+      mobilityWeight * mobilityComponent +
+      centralizationWeight * centralizationScore;
 
    return finalEvaluation;
+}
+
+// Calculate how centralized the pieces are
+function evaluateCentralization(board: BoardState, player: number): number {
+   let centralizationScore = 0;
+   const centerI = Math.floor(board.length / 2);
+   const centerJ = Math.floor(board[0].length / 2);
+
+   for (let i = 0; i < board.length; i++) {
+      for (let j = 0; j < board[i].length; j++) {
+         if (board[i][j] === player) {
+            const distFromCenter = Math.max(Math.abs(i - centerI), Math.abs(j - centerJ));
+            centralizationScore += Math.max(centerI, centerJ) - distFromCenter;
+         }
+      }
+   }
+   return centralizationScore;
 }
 
 // Get all valid corners
@@ -209,11 +235,25 @@ function minimax(
       return evaluate(state, aiPlayer);
    }
 
+   const sortedMoves = possibleMoves.slice().sort((a, b) => {
+      const pieceASize = a.piece.baseShape.reduce((total, row) => {
+         const rowSum = row.reduce<number>((sum, cell) => sum + cell, 0);
+         return total + rowSum;
+      }, 0);
+
+      const pieceBSize = b.piece.baseShape.reduce((total, row) => {
+         const rowSum = row.reduce<number>((sum, cell) => sum + cell, 0);
+         return total + rowSum;
+      }, 0);
+
+      return pieceBSize - pieceASize;
+   });
+
    let bestEval;
    // Maximizing player: alpha
    if (isMaximizingPlayer) {
       bestEval = -Infinity;
-      for (const move of possibleMoves) {
+      for (const move of sortedMoves) {
          const childState = applyMove(state, move);
          const evalScore = minimax(
             childState,
@@ -236,7 +276,7 @@ function minimax(
    // Minimizing player: beta
    else {
       bestEval = Infinity;
-      for (const move of possibleMoves) {
+      for (const move of sortedMoves) {
          const childState = applyMove(state, move);
          const evalScore = minimax(
             childState,

@@ -49,23 +49,75 @@ interface GhostPiece {
    isValid: boolean;
 }
 
+const customBoardState: BoardState = [
+   [2, 1, 1, 1, 1, 2, 2, 2, 2, 2, 1, 1, 3, 3],
+   [2, 2, 1, 2, 2, 1, 1, 1, 3, 1, 2, 3, 1, 1],
+   [2, 1, 2, 2, 3, 3, 2, 3, 3, 2, 2, 2, 1, 3],
+   [2, 1, 2, 1, 2, 3, 2, 3, 3, 3, 2, 3, 1, 1],
+   [1, 1, 3, 1, 2, 3, 2, 2, 3, 2, 1, 1, 3, 3],
+   [3, 3, 1, 1, 2, 2, 1, 2, 3, 2, 1, 1, 3, 3],
+   [3, 3, 1, 2, 3, 1, 1, 1, 2, 2, 2, 1, 3, 3],
+   [3, 3, 2, 2, 2, 3, 1, 3, 1, 1, 1, 2, 3, 3],
+   [1, 3, 2, 3, 1, 1, 3, 1, 2, 2, 1, 2, 2, 3],
+   [1, 1, 1, 2, 1, 3, 1, 1, 1, 2, 1, 2, 3, 3],
+   [1, 3, 2, 1, 1, 3, 3, 3, 3, 2, 2, 3, 3, 3],
+   [3, 3, 2, 2, 2, 2, 1, 1, 1, 1, 1, 2, 2, 2],
+   [2, 2, 3, 3, 1, 1, 3, 3, 3, 3, 3, 1, 1, 2],
+   [3, 2, 2, 3, 1, 1, 3, 3, 3, 3, 3, 3, 1, 2],
+];
+
+const p1RemainingIds = ["I4", "Z4", "F5", "L5", "W5"];
+const p2RemainingIds = ["I2", "I3", "V3", "I4", "P5", "U5"];
+
+const createCustomPlayerSet = (player: 1 | 2, remainingIds: string[]): PieceType[] => {
+   return PIECE_LIBRARY.filter((template) => remainingIds.includes(template.id)).map(
+      (template: PieceTemplate) => ({
+         id: template.id,
+         baseShape: template.shape,
+         rotation: 0,
+         isFlipped: false,
+         player: player,
+      })
+   );
+};
+
+const CUSTOM_INITIAL_STATE: GameState & { dragAttempt: number } = {
+   board: customBoardState,
+   player1Pieces: createCustomPlayerSet(1, p1RemainingIds),
+   player2Pieces: createCustomPlayerSet(2, p2RemainingIds),
+   currentPlayer: 1, // It is Player 1's turn
+   scores: {
+      player1: calculatePlacedScore(customBoardState, 1),
+      player2: calculatePlacedScore(customBoardState, 2),
+   },
+   gameOver: false,
+   winner: null,
+   lastPiecePlaced: { player1: "I1", player2: "I1" }, // Placeholder for last piece played
+   dragAttempt: 0,
+};
+
+const initialGameState: GameState & { dragAttempt: number } = {
+   board: createInitialBoard(),
+   player1Pieces: createPlayerSet(1),
+   player2Pieces: createPlayerSet(2),
+   currentPlayer: 1,
+   scores: { player1: 0, player2: 0 },
+   gameOver: false,
+   winner: null,
+   lastPiecePlaced: { player1: null, player2: null },
+   dragAttempt: 0,
+};
+
 function BlokusGame() {
    const [gameMode, setGameMode] = useState<"pvp" | "pva">("pvp");
    const [playerSide, setPlayerSide] = useState<1 | 2>(1);
    const [aiDifficulty, setAiDifficulty] = useState<number>(2);
    const [gameStarted, setGameStarted] = useState<boolean>(false);
 
-   const [gameState, setGameState] = useState<GameState & { dragAttempt: number }>({
-      board: createInitialBoard(),
-      player1Pieces: createPlayerSet(1),
-      player2Pieces: createPlayerSet(2),
-      currentPlayer: 1,
-      scores: { player1: 0, player2: 0 },
-      gameOver: false,
-      winner: null,
-      lastPiecePlaced: { player1: null, player2: null },
-      dragAttempt: 0,
-   });
+   const USE_CUSTOM_START = true;
+   const [gameState, setGameState] = useState<GameState & { dragAttempt: number }>(
+      USE_CUSTOM_START ? CUSTOM_INITIAL_STATE : initialGameState
+   );
 
    const [lastTurnTimes, setLastTurnTimes] = useState({ player1: 0, player2: 0 });
    const [activeTurnTime, setActiveTurnTime] = useState(0);
